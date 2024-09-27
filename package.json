@@ -2,18 +2,21 @@
   "name": "clarity-election-xml",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "electron ."
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "adm-zip": "^0.5.16",
-    "electron": "^32.1.2",
     "express": "^4.21.0",
     "node-fetch": "^3.3.2",
     "xml2js": "^0.6.2"
+  },
+  "devDependencies": {
+    "electron": "^32.1.2"
   }
 }
