@@ -1,66 +1,128 @@
-async function main() {
-  const { app, BrowserWindow } = await import('electron');
-  const express = (await import('express')).default;
-  const fetch = (await import('node-fetch')).default;
-  const AdmZip = (await import('adm-zip')).default;
-  const xml2js = (await import('xml2js')).default;
-  
-  // URLs to fetch data from (can be configured)
-  const urls = [
-    'https://results.enr.clarityelections.com/GA/63991/184321/reports/detailxml.zip'
-  ];
-  
-  // Setup Express app
-  const server = express();
-  const PORT = 3000;
+import { app, BrowserWindow } from 'electron';
+import path, { dirname } from 'path';
+import express from 'express';
+import bodyParser from 'body-parser';
+import fetch from 'node-fetch';
+import AdmZip from 'adm-zip';
+import xml2js from 'xml2js';
+import { promises as fs } from 'fs';
+import { fileURLToPath } from 'url';
+(async () => {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
 
-  async function fetchAndParseData(url) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
-      
-      const buffer = await response.buffer();
-      const zip = new AdmZip(buffer);
-      const detailXml = zip.getEntry('detail.xml');
+    const { app, BrowserWindow } = await import('electron');
+    const path = await import('path');
+    const express = (await import('express')).default;
+    const bodyParser = (await import('body-parser')).default;
+    const fetch = (await import('node-fetch')).default;
+    const AdmZip = (await import('adm-zip')).default;
+    const xml2js = (await import('xml2js')).default;
+    const fs = (await import('fs')).promises;
 
-      if (!detailXml) throw new Error('detail.xml not found in ZIP');
+    const server = express();
+    const PORT = 3000;
 
-      const xmlContent = detailXml.getData().toString('utf8');
-      const parsedData = await xml2js.parseStringPromise(xmlContent);
+    let urls = [];
+    let pollInterval = 60000;
 
-      return parsedData;
-    } catch (error) {
-      console.error('Error fetching or parsing data:', error);
-      return null;
-    }
-  }
+    server.use(bodyParser.json());
+    server.use(express.static(path.join(__dirname, 'react-ui', 'build')));
 
-  async function startServer() {
-    const allData = await Promise.all(urls.map(fetchAndParseData));
-
-    server.get('/data', (req, res) => {
-      const xmlBuilder = new xml2js.Builder();
-      const xml = xmlBuilder.buildObject({ Races: allData });
-      res.set('Content-Type', 'text/xml');
-      res.send(xml);
+    server.get('/api/config', (req, res) => {
+      res.json({ urls, pollInterval });
     });
 
-    server.listen(PORT, () => {
-      console.log(`Server running at http://localhost:${PORT}/data`);
+    server.post('/api/config', (req, res) => {
+      const { urls: newUrls, pollInterval: newPollInterval } = req.body;
+      urls = newUrls;
+      pollInterval = newPollInterval;
+      res.json({ message: 'Configuration updated' });
+      startPolling();
     });
-  }
 
-  app.on('ready', () => {
-    startServer();
-    const win = new BrowserWindow({ width: 800, height: 600 });
-    win.loadURL(`http://localhost:${PORT}/data`);
-  });
+    server.get('/files/:name', async (req, res) => {
+      const filePath = path.join(__dirname, 'xml-files', req.params.name);
+      try {
+        const fileContent = await fs.readFile(filePath, 'utf8');
+        res.set('Content-Type', 'text/xml');
+        res.send(fileContent);
+      } catch (err) {
+        res.status(404).send('File not found');
+      }
+    });
 
-  app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-      app.quit();
+    async function fetchAndParseData(url) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+
+        const buffer = await response.buffer();
+        const zip = new AdmZip(buffer);
+        const detailXml = zip.getEntry('detail.xml');
+
+        if (!detailXml) throw new Error('detail.xml not found in ZIP');
+
+        const xmlContent = detailXml.getData().toString('utf8');
+        return xml2js.parseStringPromise(xmlContent);
+      } catch (error) {
+        console.error('Error fetching or parsing data:', error);
+        return null;
+      }
     }
-  });
-}
 
-main().catch(error => console.error('Error during app initialization:', error));
+    async function startPolling() {
+      if (urls.length === 0) return;
+
+      async function poll() {
+        for (const url of urls) {
+          const parsedData = await fetchAndParseData(url);
+          if (parsedData) {
+            const xmlBuilder = new xml2js.Builder();
+            const xmlContent = xmlBuilder.buildObject(parsedData);
+
+            const fileName = `${new URL(url).hostname}-${Date.now()}.xml`;
+            const filePath = path.join(__dirname, 'xml-files', fileName);
+
+            await fs.mkdir(path.join(__dirname, 'xml-files'), { recursive: true });
+            await fs.writeFile(filePath, xmlContent);
+
+            console.log(`Data from ${url} written to ${fileName}`);
+          }
+        }
+        setTimeout(poll, pollInterval);
+      }
+
+      poll();
+    }
+
+    app.on('ready', () => {
+      console.log('Electron app is ready.');
+
+      server.listen(PORT, () => {
+        console.log(`Server running at http://localhost:${PORT}`);
+      });
+
+      const win = new BrowserWindow({
+        width: 800,
+        height: 600,
+        webPreferences: {
+          preload: path.join(__dirname, 'preload.js'), // If you need to use a preload script
+          contextIsolation: true,
+        },
+      });
+
+      win.loadURL(`http://localhost:${PORT}`);
+    });
+
+    app.on('window-all-closed', () => {
+      if (process.platform !== 'darwin') {
+        app.quit();
+      }
+    });
+
+  } catch (error) {
+    console.error('Error during initialization:', error);
+  }
+})();
