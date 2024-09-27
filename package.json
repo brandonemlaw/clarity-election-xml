@@ -8,5 +8,12 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "adm-zip": "^0.5.16",
+    "electron": "^32.1.2",
+    "express": "^4.21.0",
+    "node-fetch": "^3.3.2",
+    "xml2js": "^0.6.2"
+  }
 }
