@@ -17,34 +17,60 @@ import { fileURLToPath } from 'url';
     const server = express();
     const PORT = 3000;
 
-    let urls = [];
+    let urlConfig = []; // Array to store URLs with metadata
     let pollInterval = 60000;
 
     server.use(bodyParser.json());
     server.use(express.static(path.join(__dirname, 'react-ui', 'build')));
 
     server.get('/api/config', (req, res) => {
-      res.json({ urls, pollInterval });
+      res.json({ urlConfig, pollInterval });
     });
 
-    server.post('/api/config', (req, res) => {
-      const { urls: newUrls, pollInterval: newPollInterval } = req.body;
-      urls = newUrls;
+    server.post('/api/config', async (req, res) => {
+      const { url, pollInterval: newPollInterval } = req.body;
       pollInterval = newPollInterval;
-      res.json({ message: 'Configuration updated' });
-      startPolling();
-    });
 
-    server.get('/files/:name', async (req, res) => {
-      const filePath = path.join(__dirname, 'xml-files', req.params.name);
       try {
-        const fileContent = await fs.readFile(filePath, 'utf8');
-        res.set('Content-Type', 'text/xml');
-        res.send(fileContent);
-      } catch (err) {
-        res.status(404).send('File not found');
+        // Fetch and parse metadata from the URL
+        const metadata = await fetchAndParseMetadata(url);
+        
+        // Store the URL with its metadata
+        urlConfig = [...urlConfig, { url, ...metadata }];
+        
+        res.json({ message: 'Configuration updated', urlConfig });
+        startPolling();
+      } catch (error) {
+        console.error('Error updating config:', error);
+        res.status(500).json({ message: 'Failed to update configuration' });
       }
     });
+
+    server.delete('/api/config', (req, res) => {
+      const { url } = req.body;
+      urlConfig = urlConfig.filter(entry => entry.url !== url);
+      res.json({ message: 'URL deleted', urlConfig });
+    });
+
+    async function fetchAndParseMetadata(url) {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
+    
+      const buffer = await response.buffer();
+      const zip = new AdmZip(buffer);
+      const detailXml = zip.getEntry('detail.xml');
+    
+      if (!detailXml) throw new Error('detail.xml not found in ZIP');
+    
+      const xmlContent = detailXml.getData().toString('utf8');
+      const parsedData = await xml2js.parseStringPromise(xmlContent);
+    
+      return {
+        electionName: parsedData.ElectionResult.ElectionName[0],
+        electionDate: parsedData.ElectionResult.ElectionDate[0],
+        region: parsedData.ElectionResult.Region[0],
+      };
+    }
     
     async function fetchAndParseData(url) {
       try {
@@ -59,7 +85,7 @@ import { fileURLToPath } from 'url';
     
         const xmlContent = detailXml.getData().toString('utf8');
         const parsedData = await xml2js.parseStringPromise(xmlContent);
-    
+        
         const contests = parsedData.ElectionResult.Contest || [];
     
         const contestsXml = contests.map(contest => {
@@ -149,24 +175,33 @@ import { fileURLToPath } from 'url';
     }
 
     async function startPolling() {
-      if (urls.length === 0) return;
+      if (urlConfig.length === 0) return;
 
       async function poll() {
-        for (const url of urls) {
-          const parsedData = await fetchAndParseData(url);
-          if (parsedData) {
-            const fileName = `${new URL(url).hostname}-${Date.now()}.xml`;
-            const filePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', fileName);
+        for (const entry of urlConfig) {
+          const { url } = entry;
+          try {
+            console.log(`Polling data from ${url}`);
+            const parsedData = await fetchAndParseData(url);
+            if (parsedData) {
+              const fileName = `${new URL(url).hostname}-${Date.now()}.xml`;
+              const filePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', fileName);
 
-            await fs.mkdir(path.join(userDocumentsPath, 'ClarityElectionXMLFiles'), { recursive: true });
-            await fs.writeFile(filePath, parsedData);
+              await fs.mkdir(path.join(userDocumentsPath, 'ClarityElectionXMLFiles'), { recursive: true });
+              await fs.writeFile(filePath, parsedData);
 
-            console.log(`Data from ${url} written to ${filePath}`);          }
+              console.log(`Data from ${url} written to ${filePath}`);
+            }
+          } catch (error) {
+            console.error(`Error polling data from ${url}:`, error);
+          }
         }
         setTimeout(poll, pollInterval);
       }
 
-      poll();
+      poll().catch(error => {
+        console.error('Polling error:', error);
+      });
     }
 
     app.on('ready', () => {

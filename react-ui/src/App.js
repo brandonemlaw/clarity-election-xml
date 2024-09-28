@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import './styles.css';
 
 function App() {
-  const [urls, setUrls] = useState([]);
+  const [urlConfig, setUrlConfig] = useState([]);
   const [pollInterval, setPollInterval] = useState(60);
   const [newUrl, setNewUrl] = useState('');
 
   useEffect(() => {
     axios.get('/api/config')
       .then(response => {
-        setUrls(response.data.urls);
+        setUrlConfig(response.data.urlConfig);
         setPollInterval(response.data.pollInterval / 1000);
       })
       .catch(error => console.error('Error fetching config:', error));
@@ -17,22 +18,28 @@ function App() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const updatedUrls = [...urls, newUrl];
     axios.post('/api/config', {
-      urls: updatedUrls,
+      url: newUrl,
       pollInterval: pollInterval * 1000
     })
+    .then(response => {
+      setUrlConfig(response.data.urlConfig);
+      setNewUrl('');
+    })
+    .catch(error => console.error('Error updating config:', error));
+  };
+
+  const handleDelete = (url) => {
+    axios.delete('/api/config', { data: { url } })
       .then(response => {
-        console.log(response.data.message);
-        setUrls(updatedUrls);
-        setNewUrl('');
+        setUrlConfig(response.data.urlConfig);
       })
-      .catch(error => console.error('Error updating config:', error));
+      .catch(error => console.error('Error deleting URL:', error));
   };
 
   return (
-    <div>
-      <h1>Configuration</h1>
+    <div className="container">
+      <h1>Election Configuration</h1>
       <form onSubmit={handleSubmit}>
         <div>
           <label>
@@ -58,10 +65,16 @@ function App() {
         </div>
         <button type="submit">Submit</button>
       </form>
-      <h2>Configured URLs</h2>
+
+      <h2>Configured Elections</h2>
       <ul>
-        {urls.map((url, index) => (
-          <li key={index}>{url}</li>
+        {urlConfig.map((entry, index) => (
+          <li key={index}>
+            <strong>Name:</strong> {entry.electionName} <br />
+            <strong>Date:</strong> {entry.electionDate} <br />
+            <strong>Region:</strong> {entry.region} <br />
+            <button onClick={() => handleDelete(entry.url)}>Delete</button>
+          </li>
         ))}
       </ul>
     </div>
