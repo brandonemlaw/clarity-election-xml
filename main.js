@@ -7,19 +7,12 @@ import AdmZip from 'adm-zip';
 import xml2js from 'xml2js';
 import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
+
 (async () => {
   try {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
-
-    const { app, BrowserWindow } = await import('electron');
-    const path = await import('path');
-    const express = (await import('express')).default;
-    const bodyParser = (await import('body-parser')).default;
-    const fetch = (await import('node-fetch')).default;
-    const AdmZip = (await import('adm-zip')).default;
-    const xml2js = (await import('xml2js')).default;
-    const fs = (await import('fs')).promises;
+    const userDocumentsPath = app.getPath('documents');
 
     const server = express();
     const PORT = 3000;
@@ -52,24 +45,107 @@ import { fileURLToPath } from 'url';
         res.status(404).send('File not found');
       }
     });
-
+    
     async function fetchAndParseData(url) {
       try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
-
+    
         const buffer = await response.buffer();
         const zip = new AdmZip(buffer);
         const detailXml = zip.getEntry('detail.xml');
-
+    
         if (!detailXml) throw new Error('detail.xml not found in ZIP');
-
+    
         const xmlContent = detailXml.getData().toString('utf8');
-        return xml2js.parseStringPromise(xmlContent);
+        const parsedData = await xml2js.parseStringPromise(xmlContent);
+    
+        const contests = parsedData.ElectionResult.Contest || [];
+    
+        const contestsXml = contests.map(contest => {
+          const contestKey = contest.$.key;
+          const raceTitle = contest.$.text;
+          const reportingPercent = Math.trunc(parseFloat(contest.$.precinctsReportingPercent));
+    
+          const names = {};
+          const parties = {};
+          const titles = {};
+          const endings = {};
+          const totalVotes = {};
+          const votePercentages = {};
+    
+          let overallTotalVotes = 0;
+    
+          (contest.Choice || []).forEach(choice => {
+            overallTotalVotes += parseInt(choice.$.totalVotes, 10) || 0;
+          });
+    
+          (contest.Choice || []).forEach((choice, index) => {
+            const fullName = choice.$.text;
+            const totalVotesCount = parseInt(choice.$.totalVotes, 10) || 0;
+            const votePercentage = Math.trunc((totalVotesCount / overallTotalVotes) * 100);
+    
+            const { name, title, ending, party } = parseNameAndParty(fullName);
+    
+            const candidateIndex = index + 1;
+            names[`Name${candidateIndex}`] = name;
+            parties[`Party${candidateIndex}`] = party;
+            titles[`Title${candidateIndex}`] = title;
+            endings[`Ending${candidateIndex}`] = ending;
+            totalVotes[`TotalVotes${candidateIndex}`] = totalVotesCount.toLocaleString();
+            votePercentages[`VotePercentage${candidateIndex}`] = votePercentage;
+          });
+    
+          return {
+            Contest: {
+              Key: contestKey,
+              RaceTitle: raceTitle,
+              ReportingPercent: reportingPercent,
+              Names: names,
+              Titles: titles,
+              Endings: endings,
+              Parties: parties,
+              TotalVotes: totalVotes,
+              VotePercentages: votePercentages,
+            },
+          };
+        });
+    
+        const builder = new xml2js.Builder({ headless: true });
+        const simplifiedXmlContent = builder.buildObject({ Contests: contestsXml });
+    
+        return simplifiedXmlContent;
       } catch (error) {
         console.error('Error fetching or parsing data:', error);
         return null;
       }
+    }
+    
+    function parseNameAndParty(fullName) {
+      let name = fullName;
+      let title = '';
+      let ending = '';
+      let party = '';
+    
+      const partyMatch = fullName.match(/\(([^)]+)\)/);
+      if (partyMatch) {
+        party = partyMatch[1].charAt(0);
+        name = name.replace(partyMatch[0], '').trim();
+      }
+    
+      const titleMatch = name.match(/^(Dr\.|Rep\.|Sen\.)\s+/);
+      if (titleMatch) {
+        title = titleMatch[1];
+        name = name.replace(titleMatch[0], '').trim();
+      }
+    
+      const endingMatch = name.match(/(Sr\.|Jr\.|III)$/);
+      if (endingMatch) {
+        ending = endingMatch[1];
+        name = name.replace(endingMatch[0], '').trim();
+      }
+    
+      return { name, title, ending, party };
     }
 
     async function startPolling() {
@@ -79,17 +155,13 @@ import { fileURLToPath } from 'url';
         for (const url of urls) {
           const parsedData = await fetchAndParseData(url);
           if (parsedData) {
-            const xmlBuilder = new xml2js.Builder();
-            const xmlContent = xmlBuilder.buildObject(parsedData);
-
             const fileName = `${new URL(url).hostname}-${Date.now()}.xml`;
-            const filePath = path.join(__dirname, 'xml-files', fileName);
+            const filePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', fileName);
 
-            await fs.mkdir(path.join(__dirname, 'xml-files'), { recursive: true });
-            await fs.writeFile(filePath, xmlContent);
+            await fs.mkdir(path.join(userDocumentsPath, 'ClarityElectionXMLFiles'), { recursive: true });
+            await fs.writeFile(filePath, parsedData);
 
-            console.log(`Data from ${url} written to ${fileName}`);
-          }
+            console.log(`Data from ${url} written to ${filePath}`);          }
         }
         setTimeout(poll, pollInterval);
       }
@@ -108,7 +180,7 @@ import { fileURLToPath } from 'url';
         width: 800,
         height: 600,
         webPreferences: {
-          preload: path.join(__dirname, 'preload.js'), // If you need to use a preload script
+          preload: path.join(__dirname, 'preload.js'),
           contextIsolation: true,
         },
       });
