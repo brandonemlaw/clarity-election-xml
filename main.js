@@ -112,7 +112,11 @@ import Store from 'electron-store';  // Import electron-store
           const votePercentages = {};
     
           let overallTotalVotes = 0;
-    
+
+          let result = {
+            Contest: {}
+          };
+
           (contest.Choice || []).forEach(choice => {
             overallTotalVotes += parseInt(choice.$.totalVotes, 10) || 0;
           });
@@ -123,6 +127,10 @@ import Store from 'electron-store';  // Import electron-store
             const votePercentage = Math.trunc((totalVotesCount / overallTotalVotes) * 100);
     
             const { name, title, ending, party } = parseNameAndParty(fullName);
+
+            const adjustedName = name.replace(/[^\w]/gi, '')
+            console.log(name)
+            result["Contest"][`${adjustedName}Percent`] = `${votePercentage}%`;
     
             const candidateIndex = index + 1;
             names[`Name${candidateIndex}`] = name;
@@ -132,20 +140,18 @@ import Store from 'electron-store';  // Import electron-store
             totalVotes[`TotalVotes${candidateIndex}`] = totalVotesCount.toLocaleString();
             votePercentages[`VotePercentage${candidateIndex}`] = `${votePercentage}%`;
           });
-    
-          return {
-            Contest: {
-              Key: contestKey,
-              RaceTitle: raceTitle,
-              ReportingPercent: reportingPercent,
-              Names: names,
-              Titles: titles,
-              Endings: endings,
-              Parties: parties,
-              TotalVotes: totalVotes,
-              VotePercentages: votePercentages,
-            },
-          };
+
+          result["Contest"]["Key"] = contestKey;
+          result["Contest"]["RaceTitle"] = raceTitle;
+          result["Contest"]["ReportingPercent"] = reportingPercent;
+          result["Contest"]["Names"] = names;
+          result["Contest"]["Titles"] = titles;
+          result["Contest"]["Endings"] = endings;
+          result["Contest"]["Parties"] = parties;
+          result["Contest"]["TotalVotes"] = totalVotes;
+          result["Contest"]["VotePercentages"] = votePercentages;
+
+          return result;
         });
       } catch (error) {
         console.error('Error fetching or parsing data:', error);
