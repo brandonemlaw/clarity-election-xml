@@ -197,8 +197,8 @@ import Store from 'electron-store';  // Import electron-store
                 const builder = new xml2js.Builder({ headless: true });
                 const simplifiedXmlContent = builder.buildObject({ Contest: contest });
 
-                const contestFileName = `${entry.electionName}-${entry.electionDate}-${contest.Contest.RaceTitle}.xml`;
-                const validContestFileName = contestFileName.replaceAll("/", "-").replaceAll("\\", "-").replaceAll(",", "-")
+                const contestFileName = `${entry.electionName}-${entry.electionDate}.${contest.Contest.RaceTitle}.xml`;
+                const validContestFileName = contestFileName.replaceAll("/", "-").replaceAll("\\", "-").replaceAll(",", "-").replaceAll(".", "")
                 const contestFilePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', validContestFileName);
 
                 await fs.writeFile(contestFilePath, simplifiedXmlContent);
