@@ -1,6 +1,6 @@
 {
-  "name": "clarity-election-xml",
-  "version": "1.0.0",
+  "name": "clarity-election-xml-converter",
+  "version": "1.0.1",
   "description": "",
   "type": "module",
   "main": "main.js",
@@ -8,13 +8,17 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "electron .",
     "postinstall": "electron-builder install-app-deps",
-    "build": "electron-builder --mac --windows --linux",
-    "release": "electron-builder --mac --windows --linux --publish always"
+    "release": "electron-builder --mac --windows --linux --publish always",
+    "publishwin": "electron-builder --win --config --ia32"
   },
   "build": {
-    "appId": "clarity-elections-xml",
+    "appId": "clarity-election-xml-converter",
     "mac": {
       "category": "productivity"
+    },
+    "directories": {
+    "buildResources": "resources",
+    "output": "release"
     }
   },
   "keywords": [],
