@@ -184,7 +184,7 @@ import { fileURLToPath } from 'url';
             console.log(`Polling data from ${url}`);
             const parsedData = await fetchAndParseData(url);
             if (parsedData) {
-              const fileName = `${new URL(url).hostname}-${Date.now()}.xml`;
+              const fileName = `${entry.electionName}-${entry.electionDate}-${entry.region}.xml`;
               const filePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', fileName);
 
               await fs.mkdir(path.join(userDocumentsPath, 'ClarityElectionXMLFiles'), { recursive: true });
