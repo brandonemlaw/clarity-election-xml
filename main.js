@@ -33,9 +33,13 @@ import Store from 'electron-store';  // Import electron-store
       res.json({ urlConfig, pollInterval });
     });
 
+    server.post('/api/refresh', (req, res) => {
+      poll();
+      res.status(200);
+    });
+
     server.post('/api/config', async (req, res) => {
-      const { url, pollInterval: newPollInterval } = req.body;
-      pollInterval = newPollInterval;
+      const { url } = req.body;
 
       try {
         const metadata = await fetchAndParseMetadata(url);
@@ -43,13 +47,25 @@ import Store from 'electron-store';  // Import electron-store
 
         // Persist updated configuration
         store.set('urlConfig', urlConfig);
-        store.set('pollInterval', pollInterval);
 
         res.json({ message: 'Configuration updated', urlConfig });
-        startPolling();
       } catch (error) {
         console.error('Error updating config:', error);
         res.status(500).json({ message: 'Failed to update configuration' });
+      }
+    });
+
+    server.post('/api/setRefresh', async (req, res) => {
+      const { pollInterval: newPollInterval } = req.body;
+      pollInterval = newPollInterval;
+
+      try {
+        store.set('pollInterval', pollInterval);
+        startPolling();
+        res.status(200);
+      } catch (error) {
+        console.error('Error updating poll interval:', error);
+        res.status(500).json({ message: 'Failed to update poll interval' });
       }
     });
 
@@ -61,6 +77,7 @@ import Store from 'electron-store';  // Import electron-store
       store.set('urlConfig', urlConfig);
 
       res.json({ message: 'URL deleted', urlConfig });
+      
     });
 
     async function fetchAndParseMetadata(url) {
@@ -185,43 +202,44 @@ import Store from 'electron-store';  // Import electron-store
     
       return { name, title, ending, party };    }
 
-    async function startPolling() {
+
+    async function poll() {
       if (urlConfig.length === 0) return;
 
       function removeSpecialChars(value) {
         return value.replaceAll("/", "-").replaceAll("\\", "-").replaceAll(",", "-").replaceAll(".", "")
       }
       
-      async function poll() {
-        for (const entry of urlConfig) {
-          const { url, electionName, electionDate, region } = entry;
-          try {
-            console.log(`Polling data from ${url}`);
-            const contests = await fetchAndParseData(url);
-            console.log(`Parsed data`);
+      for (const entry of urlConfig) {
+        const { url, electionName, electionDate, region } = entry;
+        try {
+          console.log(`Polling data from ${url}`);
+          const contests = await fetchAndParseData(url);
+          console.log(`Parsed data`);
 
-            if (contests) {
-              await fs.mkdir(path.join(userDocumentsPath, 'ClarityElectionXMLFiles'), { recursive: true });
+          if (contests) {
+            await fs.mkdir(path.join(userDocumentsPath, 'ClarityElectionXMLFiles'), { recursive: true });
 
-              for (const contest of contests) {
-                const builder = new xml2js.Builder({ headless: true });
-                const simplifiedXmlContent = builder.buildObject({ Contest: contest });
+            for (const contest of contests) {
+              const builder = new xml2js.Builder({ headless: true });
+              const simplifiedXmlContent = builder.buildObject({ Contest: contest });
 
-                const contestFileName = `${removeSpecialChars(entry.electionName)}-${removeSpecialChars(entry.electionDate)}.${removeSpecialChars(contest.Contest.RaceTitle)}.xml`;
-                const contestFilePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', contestFileName);
+              const contestFileName = `${removeSpecialChars(entry.electionName)}-${removeSpecialChars(entry.electionDate)}.${removeSpecialChars(contest.Contest.RaceTitle)}.xml`;
+              const contestFilePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', contestFileName);
 
-                await fs.writeFile(contestFilePath, simplifiedXmlContent);
+              await fs.writeFile(contestFilePath, simplifiedXmlContent);
 
-                console.log(`Contest ${contest.Contest.RaceTitle} written to ${contestFilePath}`);
-              }
+              console.log(`Contest ${contest.Contest.RaceTitle} written to ${contestFilePath}`);
             }
-          } catch (error) {
-            console.error(`Error polling data from ${url}:`, error);
           }
+        } catch (error) {
+          console.error(`Error polling data from ${url}:`, error);
         }
-        setTimeout(poll, pollInterval);
       }
-
+    }
+    
+    async function startPolling() {
+      setTimeout(poll, pollInterval);
       poll().catch(error => {
         console.error('Polling error:', error);
       });
@@ -235,8 +253,8 @@ import Store from 'electron-store';  // Import electron-store
       });
 
       const win = new BrowserWindow({
-        width: 800,
-        height: 600,
+        width: 600,
+        height: 700,
         webPreferences: {
           preload: path.join(__dirname, 'preload.js'),
           contextIsolation: true,

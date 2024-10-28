@@ -16,10 +16,27 @@ function App() {
       .catch(error => console.error('Error fetching config:', error));
   }, []);
 
+  const handleRefresh = (e) => {
+    e.preventDefault();
+    axios.post('/api/refresh', {  })
+    .catch(error => console.error('Error updating config:', error));
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     axios.post('/api/config', {
       url: newUrl,
+    })
+    .then(response => {
+      setUrlConfig(response.data.urlConfig);
+      setNewUrl('');
+    })
+    .catch(error => console.error('Error updating config:', error));
+  };
+
+  const handleSetRefresh = (e) => {
+    e.preventDefault();
+    axios.post('/api/setRefresh', {
       pollInterval: pollInterval * 1000
     })
     .then(response => {
@@ -39,34 +56,11 @@ function App() {
 
   return (
     <div className="container">
-      <h1>Election Configuration</h1>
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>
-            New URL:
-            <input
-              type="url"
-              value={newUrl}
-              onChange={(e) => setNewUrl(e.target.value)}
-              required
-            />
-          </label>
-        </div>
-        <div>
-          <label>
-            Refresh Time (seconds):
-            <input
-              type="number"
-              value={pollInterval}
-              onChange={(e) => setPollInterval(e.target.value)}
-              required
-            />
-          </label>
-        </div>
-        <button type="submit">Submit</button>
+      <form>
+        <button onClick={(e) => handleRefresh(e)}>Refresh</button>
       </form>
 
-      <h2>Configured Elections</h2>
+      <h3>Configured Elections</h3>
       <ul>
         {urlConfig.map((entry, index) => (
           <li key={index}>
@@ -77,6 +71,38 @@ function App() {
           </li>
         ))}
       </ul>
+
+      <h3>Add New Election from Clarity</h3>
+      <form onSubmit={handleSubmit}>
+        <div>
+          <label>
+            URL from "Deail XML" Report:
+            <input
+              type="url"
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
+              required
+            />
+          </label>
+        </div>
+        <button type="submit">Add</button>
+      </form>
+
+      <h3>Change Refresh Time</h3>
+      <form onSubmit={handleSetRefresh}>
+        <div>
+          <label>
+            Refresh Time (seconds):
+            <input
+              type="number"
+              value={pollInterval}
+              onChange={(e) => setPollInterval(e.target.value)}
+              required
+            />
+          </label>
+          <button type="submit">Save</button>
+        </div>
+      </form>
     </div>
   );
 }
