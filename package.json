@@ -16,6 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "adm-zip": "^0.5.16",
+    "dmg-license": "^1.0.11",
     "express": "^4.21.0",
     "node-fetch": "^3.3.2",
     "xml2js": "^0.6.2"
