@@ -7,6 +7,7 @@ import AdmZip from 'adm-zip';
 import xml2js from 'xml2js';
 import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
+import Store from 'electron-store';  // Import electron-store
 
 (async () => {
   try {
@@ -17,8 +18,13 @@ import { fileURLToPath } from 'url';
     const server = express();
     const PORT = 3000;
 
-    let urlConfig = []; // Array to store URLs with metadata
-    let pollInterval = 60000;
+    const store = new Store();  // Create a new store instance
+
+    // Load persisted data or initialize default values
+    let urlConfig = store.get('urlConfig', []);
+    console.log("loaded ")
+    console.log(urlConfig)
+    let pollInterval = store.get('pollInterval', 60000);
 
     server.use(bodyParser.json());
     server.use(express.static(path.join(__dirname, 'react-ui', 'build')));
@@ -32,12 +38,13 @@ import { fileURLToPath } from 'url';
       pollInterval = newPollInterval;
 
       try {
-        // Fetch and parse metadata from the URL
         const metadata = await fetchAndParseMetadata(url);
-        
-        // Store the URL with its metadata
         urlConfig = [...urlConfig, { url, ...metadata }];
-        
+
+        // Persist updated configuration
+        store.set('urlConfig', urlConfig);
+        store.set('pollInterval', pollInterval);
+
         res.json({ message: 'Configuration updated', urlConfig });
         startPolling();
       } catch (error) {
@@ -49,29 +56,33 @@ import { fileURLToPath } from 'url';
     server.delete('/api/config', (req, res) => {
       const { url } = req.body;
       urlConfig = urlConfig.filter(entry => entry.url !== url);
+
+      // Persist updated configuration
+      store.set('urlConfig', urlConfig);
+
       res.json({ message: 'URL deleted', urlConfig });
     });
 
     async function fetchAndParseMetadata(url) {
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
-    
+
       const buffer = await response.buffer();
       const zip = new AdmZip(buffer);
       const detailXml = zip.getEntry('detail.xml');
-    
+
       if (!detailXml) throw new Error('detail.xml not found in ZIP');
-    
+
       const xmlContent = detailXml.getData().toString('utf8');
       const parsedData = await xml2js.parseStringPromise(xmlContent);
-    
+
       return {
         electionName: parsedData.ElectionResult.ElectionName[0],
         electionDate: parsedData.ElectionResult.ElectionDate[0],
         region: parsedData.ElectionResult.Region[0],
       };
     }
-    
+
     async function fetchAndParseData(url) {
       try {
         const response = await fetch(url);
@@ -85,10 +96,10 @@ import { fileURLToPath } from 'url';
     
         const xmlContent = detailXml.getData().toString('utf8');
         const parsedData = await xml2js.parseStringPromise(xmlContent);
-        
+    
         const contests = parsedData.ElectionResult.Contest || [];
     
-        const contestsXml = contests.map(contest => {
+        return contests.map(contest => {
           const contestKey = contest.$.key;
           const raceTitle = contest.$.text;
           const reportingPercent = Math.trunc(parseFloat(contest.$.precinctsReportingPercent));
@@ -119,7 +130,7 @@ import { fileURLToPath } from 'url';
             titles[`Title${candidateIndex}`] = title;
             endings[`Ending${candidateIndex}`] = ending;
             totalVotes[`TotalVotes${candidateIndex}`] = totalVotesCount.toLocaleString();
-            votePercentages[`VotePercentage${candidateIndex}`] = votePercentage;
+            votePercentages[`VotePercentage${candidateIndex}`] = `${votePercentage}%`;
           });
     
           return {
@@ -136,17 +147,12 @@ import { fileURLToPath } from 'url';
             },
           };
         });
-    
-        const builder = new xml2js.Builder({ headless: true });
-        const simplifiedXmlContent = builder.buildObject({ Contests: contestsXml });
-    
-        return simplifiedXmlContent;
       } catch (error) {
         console.error('Error fetching or parsing data:', error);
         return null;
       }
     }
-    
+
     function parseNameAndParty(fullName) {
       let name = fullName;
       let title = '';
@@ -171,26 +177,34 @@ import { fileURLToPath } from 'url';
         name = name.replace(endingMatch[0], '').trim();
       }
     
-      return { name, title, ending, party };
-    }
+      return { name, title, ending, party };    }
 
     async function startPolling() {
       if (urlConfig.length === 0) return;
-
+      
       async function poll() {
         for (const entry of urlConfig) {
-          const { url } = entry;
+          const { url, electionName, electionDate, region } = entry;
           try {
             console.log(`Polling data from ${url}`);
-            const parsedData = await fetchAndParseData(url);
-            if (parsedData) {
-              const fileName = `${entry.electionName}-${entry.electionDate}-${entry.region}.xml`;
-              const filePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', fileName);
+            const contests = await fetchAndParseData(url);
+            console.log(`Parsed data`);
 
+            if (contests) {
               await fs.mkdir(path.join(userDocumentsPath, 'ClarityElectionXMLFiles'), { recursive: true });
-              await fs.writeFile(filePath, parsedData);
 
-              console.log(`Data from ${url} written to ${filePath}`);
+              for (const contest of contests) {
+                const builder = new xml2js.Builder({ headless: true });
+                const simplifiedXmlContent = builder.buildObject({ Contest: contest });
+
+                const contestFileName = `${entry.electionName}-${entry.electionDate}-${contest.Contest.RaceTitle}.xml`;
+                const validContestFileName = contestFileName.replaceAll("/", "-").replaceAll("\\", "-").replaceAll(",", "-")
+                const contestFilePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', validContestFileName);
+
+                await fs.writeFile(contestFilePath, simplifiedXmlContent);
+
+                console.log(`Contest ${contest.Contest.RaceTitle} written to ${contestFilePath}`);
+              }
             }
           } catch (error) {
             console.error(`Error polling data from ${url}:`, error);
@@ -221,6 +235,9 @@ import { fileURLToPath } from 'url';
       });
 
       win.loadURL(`http://localhost:${PORT}`);
+
+      // Start polling immediately after app is ready and server is started
+      startPolling();
     });
 
     app.on('window-all-closed', () => {

@@ -1,6 +1,6 @@
 {
-  "short_name": "Clarity Election XML Converter",
-  "name": "Create React App Sample",
+  "short_name": "Election XML",
+  "name": "Clarity Election XML Converter",
   "icons": [
     {
       "src": "favicon.ico",
