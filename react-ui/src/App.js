@@ -54,7 +54,7 @@ function App() {
         </div>
         <div>
           <label>
-            Polling Interval (seconds):
+            Refresh Time (seconds):
             <input
               type="number"
               value={pollInterval}

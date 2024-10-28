@@ -11,6 +11,12 @@
     "build": "electron-builder --mac --windows --linux",
     "release": "electron-builder --mac --windows --linux --publish always"
   },
+  "build": {
+    "appId": "clarity-elections-xml",
+    "mac": {
+      "category": "productivity"
+    }
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
