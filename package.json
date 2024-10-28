@@ -17,8 +17,8 @@
       "category": "productivity"
     },
     "directories": {
-    "buildResources": "resources",
-    "output": "release"
+      "buildResources": "resources",
+      "output": "release"
     }
   },
   "keywords": [],
@@ -27,6 +27,7 @@
   "dependencies": {
     "adm-zip": "^0.5.16",
     "dmg-license": "^1.0.11",
+    "electron-store": "^10.0.0",
     "express": "^4.21.0",
     "node-fetch": "^3.3.2",
     "xml2js": "^0.6.2"
