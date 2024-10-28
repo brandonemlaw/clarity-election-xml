@@ -181,6 +181,10 @@ import Store from 'electron-store';  // Import electron-store
 
     async function startPolling() {
       if (urlConfig.length === 0) return;
+
+      function removeSpecialChars(value) {
+        return value.replaceAll("/", "-").replaceAll("\\", "-").replaceAll(",", "-").replaceAll(".", "")
+      }
       
       async function poll() {
         for (const entry of urlConfig) {
@@ -197,9 +201,8 @@ import Store from 'electron-store';  // Import electron-store
                 const builder = new xml2js.Builder({ headless: true });
                 const simplifiedXmlContent = builder.buildObject({ Contest: contest });
 
-                const contestFileName = `${entry.electionName}-${entry.electionDate}.${contest.Contest.RaceTitle}.xml`;
-                const validContestFileName = contestFileName.replaceAll("/", "-").replaceAll("\\", "-").replaceAll(",", "-").replaceAll(".", "")
-                const contestFilePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', validContestFileName);
+                const contestFileName = `${removeSpecialChars(entry.electionName)}-${removeSpecialChars(entry.electionDate)}.${removeSpecialChars(contest.Contest.RaceTitle)}.xml`;
+                const contestFilePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', contestFileName);
 
                 await fs.writeFile(contestFilePath, simplifiedXmlContent);
 
