@@ -148,7 +148,8 @@ import Store from 'electron-store';  // Import electron-store
             const adjustedName = name.replace(/[^\w]/gi, '')
             console.log(name)
             result["Contest"][`${adjustedName}Percent`] = `${votePercentage}%`;
-    
+            result["Contest"][`${adjustedName}Votes`] = `${totalVotesCount}%`;
+
             const candidateIndex = index + 1;
             names[`Name${candidateIndex}`] = name;
             parties[`Party${candidateIndex}`] = party;
