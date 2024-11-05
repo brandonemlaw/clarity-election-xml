@@ -141,7 +141,10 @@ import Store from 'electron-store';  // Import electron-store
           (contest.Choice || []).forEach((choice, index) => {
             const fullName = choice.$.text;
             const totalVotesCount = parseInt(choice.$.totalVotes, 10) || 0;
-            const votePercentage = Math.trunc((totalVotesCount / overallTotalVotes) * 100);
+            let votePercentage = Math.trunc((totalVotesCount / overallTotalVotes) * 100);
+            if (overallTotalVotes == 0) {
+              votePercentage = 0;
+            }
     
             const { name, title, ending, party } = parseNameAndParty(fullName);
 
@@ -161,7 +164,7 @@ import Store from 'electron-store';  // Import electron-store
 
           result["Contest"]["Key"] = contestKey;
           result["Contest"]["RaceTitle"] = raceTitle;
-          result["Contest"]["ReportingPercent"] = reportingPercent;
+          result["Contest"]["Reporting"] = `${reportingPercent}%`;
           result["Contest"]["Names"] = names;
           result["Contest"]["Titles"] = titles;
           result["Contest"]["Endings"] = endings;
@@ -208,7 +211,7 @@ import Store from 'electron-store';  // Import electron-store
       if (urlConfig.length === 0) return;
 
       function removeSpecialChars(value) {
-        return value.replaceAll("/", "-").replaceAll("\\", "-").replaceAll(",", "-").replaceAll(".", "")
+        return value.replaceAll("/", "-").replaceAll("\\", "-").replaceAll(",", "-").replaceAll(":", "").replaceAll(".", "")
       }
       
       for (const entry of urlConfig) {
@@ -225,7 +228,9 @@ import Store from 'electron-store';  // Import electron-store
               const builder = new xml2js.Builder({ headless: true });
               const simplifiedXmlContent = builder.buildObject({ Contest: contest });
 
-              const contestFileName = `${removeSpecialChars(entry.electionName)}-${removeSpecialChars(entry.electionDate)}.${removeSpecialChars(contest.Contest.RaceTitle)}.xml`;
+              let contestFileName = `${removeSpecialChars(entry.electionName)}-${removeSpecialChars(entry.electionDate)}.${removeSpecialChars(contest.Contest.RaceTitle)}.xml`;
+              contestFileName = (contestFileName.length > 250) ? contestFileName.slice(0, 249) : contestFileName;
+
               const contestFilePath = path.join(userDocumentsPath, 'ClarityElectionXMLFiles', contestFileName);
 
               await fs.writeFile(contestFilePath, simplifiedXmlContent);
