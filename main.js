@@ -149,10 +149,8 @@ import Store from 'electron-store';  // Import electron-store
             const { name, title, ending, party } = parseNameAndParty(fullName);
 
             const adjustedName = name.replace(/[^\w]/gi, '')
-            console.log(name)
             result["Contest"][`${adjustedName}Percent`] = `${votePercentage}%`;
-            result["Contest"][`${adjustedName}Votes`] = totalVotesCount;
-
+            result["Contest"][`${adjustedName}Votes`] = totalVotesCount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
             const candidateIndex = index + 1;
             names[`Name${candidateIndex}`] = name;
             parties[`Party${candidateIndex}`] = party;
